@@ -9,7 +9,6 @@
                 "-g",
                 "${workspaceFolder}/*.cpp",
                 "${workspaceFolder}/common/*.cpp",
-                "${workspaceFolder}/common_/*.cpp",
                 "${workspaceFolder}/glad/*.c",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",

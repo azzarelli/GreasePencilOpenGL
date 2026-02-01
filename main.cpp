@@ -16,8 +16,7 @@ using namespace glm;
 
 #include "common/shader.hpp"
 #include "common/controls.hpp"
-
-#include "common_/mesh.hpp"
+#include "common/mesh.hpp"
 
 
 GLFWwindow* window = nullptr;

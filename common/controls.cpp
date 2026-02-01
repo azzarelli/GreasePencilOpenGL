@@ -8,8 +8,7 @@ extern GLFWwindow* window; // The "extern" keyword here is to access the variabl
 using namespace glm;
 
 #include "controls.hpp"
-#include "rayTracer.hpp"
-#include "application.hpp"
+
 
 glm::mat4 ViewMatrix;
 glm::mat4 ProjectionMatrix;
@@ -102,29 +101,4 @@ void computeMatricesFromInputs(){
         up                  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
-}
-
-
-void mouse_button_callback(GLFWwindow* win, int button, int action, int mods)
-{
-    if (button != GLFW_MOUSE_BUTTON_LEFT || action != GLFW_PRESS) return;
-    auto* app = static_cast<AppContext*>(glfwGetWindowUserPointer(win));
-    if (!app) return;
-
-    double mx, my;
-    glfwGetCursorPos(win, &mx, &my);
-
-    Ray ray = makeRayFromMouse(
-        mx, my,
-        app->projection,
-        app->view,
-        app->model,
-        app->width,
-        app->height
-    );
-
-    glm::vec3 hit;
-    if (pickOnMesh(ray, *app->vertices, *app->indices, hit)) {
-        app->linePoints.push_back(hit);
-    }
 }
