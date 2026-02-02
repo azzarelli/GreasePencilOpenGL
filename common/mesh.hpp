@@ -15,22 +15,55 @@ class BaseMesh{
         void step();
         void del();
 
+    protected:
+        std::vector<glm::vec3> vertices;
+        std::vector<unsigned int> indices;
+        std::vector<glm::vec2> uvs;
+        std::vector<glm::vec3> normals;
+
     private:
-    const aiScene* scene;
+        const aiScene* scene;
 
-    std::vector<glm::vec3> vertices;
-    std::vector<glm::vec2> uvs;
-    std::vector<glm::vec3> normals;
-    std::vector<unsigned int> indices;
+        GLuint vertexbuffer;
+        GLuint uvbuffer;
+        GLuint normalbuffer;
+        GLuint elementbuffer;
+
+        GLuint Texture;
+        GLuint TextureID;
+
+        GLuint VertexArrayID;
+
+};
+
+class AABB{
+    public:
+        AABB(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c);
+        AABB(const std::vector<glm::vec3>& verts, std::vector<unsigned int> indices);
+        AABB(const std::vector<glm::vec3>& points);
+        
+        glm::vec3 bmin, bmax;
+        glm::vec3 centroid;
+
+        int longest_axis();    
+};
+
+class BVHMesh : public BaseMesh{
+    public:
+        void buildBVH(uint32_t leafSize);
     
-    GLuint vertexbuffer;
-    GLuint uvbuffer;
-    GLuint normalbuffer;
-    GLuint elementbuffer;
+    private:
+        struct Node{
+            AABB box;
+            uint32_t ChildIndex = 0;
+            std::vector<unsigned int> indices;
+        };
 
-    GLuint Texture;
-    GLuint TextureID;
+        void splitNode(uint32_t ParentIdx);
 
-    GLuint VertexArrayID;
+        uint32_t leafMaxSize;
+
+        std::vector<Node> nodes;
+        std::vector<uint32_t> triangleOrder;
 
 };

@@ -21,7 +21,7 @@ glm::mat4 getProjectionMatrix(){
 }
 
 // Initial position : on +Z
-glm::vec3 position = glm::vec3( 0, 0, 3 ); 
+glm::vec3 position = glm::vec3( 0, 1, 3 ); 
 // Initial horizontal angle : toward -Z
 float horizontalAngle = 3.14f;
 // Initial vertical angle : none
@@ -90,6 +90,13 @@ void computeMatricesFromInputs(){
     }
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
         position -= up * speed;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+        position = glm::vec3(0, 1, 3);
+        horizontalAngle = 3.14f;
+        verticalAngle = 0.0f;
+        initialFoV = 60.0f;
     }
 
 

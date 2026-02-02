@@ -39,7 +39,7 @@ int main(){
     int width = 1024;
     int height = 768;
 
-    window = glfwCreateWindow(width, height, "Tut 03", NULL, NULL);
+    window = glfwCreateWindow(width, height, "BVH", NULL, NULL);
 
     if (window == NULL){
         fprintf(stderr, "Failed to open GLFW ...");
@@ -84,8 +84,10 @@ int main(){
     GLuint LightPosID = glGetUniformLocation(programID, "LightPosition_worldspace"); // Init model transform 
 
 
-    BaseMesh basemesh;
+    BVHMesh basemesh;
     basemesh.load("../assets/Person.obj","../assets/uvmap.DDS", programID);
+    basemesh.buildBVH((uint32_t) 4);
+
 
     GLuint lineVAO=0, lineVBO=0;
     glGenVertexArrays(1, &lineVAO);
@@ -105,7 +107,7 @@ int main(){
     do{
         // Clear scene to avoid flickering
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glClearColor(0.2f, 0.3f, 0.6f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.1f, 1.0f);
 
         computeMatricesFromInputs();
         mat4 ProjectionMatrix = getProjectionMatrix();

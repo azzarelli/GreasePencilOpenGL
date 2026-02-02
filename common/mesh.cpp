@@ -1,6 +1,8 @@
 #include "mesh.hpp"
 #include "texture.hpp"
 
+#include <glm/gtx/string_cast.hpp>
+
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 
@@ -167,5 +169,157 @@ void BaseMesh::del(){
     glDeleteBuffers(1, &elementbuffer);
 	glDeleteTextures(1, &Texture);
 	glDeleteVertexArrays(1, &VertexArrayID);
+
+}
+
+
+AABB::AABB(const glm::vec3& a, const glm::vec3& b, const glm::vec3& c) {
+    centroid = (a + b + c) * (1.0f / 3.0f);
+
+    bmin = glm::vec3(
+        std::min({a.x, b.x, c.x}),
+        std::min({a.y, b.y, c.y}),
+        std::min({a.z, b.z, c.z})
+    );
+
+    bmax = glm::vec3(
+        std::max({a.x, b.x, c.x}),
+        std::max({a.y, b.y, c.y}),
+        std::max({a.z, b.z, c.z})
+    );
+}
+
+AABB::AABB(const std::vector<glm::vec3>& points) {
+    centroid = glm::vec3(0.0f);
+    bmin = bmax = points[0];
+
+    for (const auto& p: points){
+        bmin = glm::min(bmin, p);
+        bmax = glm::max(bmax, p);
+        centroid += p;
+    }
+
+    centroid /= static_cast<float>(points.size());
+}
+
+AABB::AABB(const std::vector<glm::vec3>& verts, std::vector<unsigned int> indices) {
+    centroid = glm::vec3(0.0f);
+    bmin = bmax = verts[indices[0]];
+
+    for (unsigned int idx : indices)
+    {
+        const glm::vec3& v = verts[idx];
+        bmin = glm::min(bmin, v);
+        bmax = glm::max(bmax, v);
+        centroid += v;
+    }
+    centroid /= static_cast<float>(indices.size());
+}
+
+int AABB::longest_axis(){
+    glm::vec3 blen = bmax - bmin;
+    int axis = 0;
+    if(blen.y > blen.x) axis=1;
+    if(blen.z > blen[axis]) axis = 2;
+    return axis;
+}
+
+void BVHMesh::splitNode(uint32_t ParentIdx){
+
+    const std::vector<unsigned int>& index_pass =  nodes[ParentIdx].indices;
+
+    uint32_t triCount = (uint32_t) (index_pass.size() / 3);
+
+    // Deal with Child
+    if(triCount <= leafMaxSize){
+        // Handle Child/Leaf
+        return;
+    }
+
+    // Get the axis for splitting lists
+    int axis = nodes[ParentIdx].box.longest_axis();
+
+    // If the axis is small it becomes a child
+    if((nodes[ParentIdx].box.bmax[axis] - nodes[ParentIdx].box.bmin[axis]) < 1e-8){
+        // Handle Child/Leaf
+        return;
+    }
+    
+    // Checks passed! This is a parent node
+
+    // For now take the longest axis of the AABB
+    // Go through each triangle
+    std::vector<uint32_t> triRefs(triCount);
+    for(uint32_t i = 0; i < triCount; i++){
+        triRefs[i] = i;
+    }
+
+    // Sort the list of triangle references based on the average vertex position along
+    //  a given axis
+    std::sort(triRefs.begin(), triRefs.end(),
+    [&](uint32_t a, uint32_t b)
+    {
+        auto centroid = [&](uint32_t i)
+        {
+            return (
+                vertices[index_pass[i*3 + 0]] +
+                vertices[index_pass[i*3 + 1]] +
+                vertices[index_pass[i*3 + 2]]
+            ) * (1.0f / 3.0f);
+        };
+
+        return centroid(a)[axis] < centroid(b)[axis];
+    });
+
+    // the mid point of the list - even split
+    uint32_t mid = triCount / 2;
+
+    // Pass into left and right indices
+    std::vector<unsigned int> leftIndices;
+    std::vector<unsigned int> rightIndices;
+    for (uint32_t i = 0; i < triCount; i++)
+    {   
+        auto& dst = (i < mid) ? leftIndices : rightIndices;
+
+        dst.push_back(index_pass[triRefs[i]*3 + 0]);
+        dst.push_back(index_pass[triRefs[i]*3 + 1]);
+        dst.push_back(index_pass[triRefs[i]*3 + 2]);
+    }
+    
+
+    Node leftNode =  Node{AABB(vertices, leftIndices), 0, leftIndices};
+    Node rightNode =  Node{AABB(vertices, rightIndices), 0, rightIndices};
+    
+    // Update parent node with childNode position
+    uint32_t childIndex = (uint32_t)nodes.size();
+    nodes[ParentIdx].ChildIndex = childIndex;
+    nodes.push_back(leftNode);
+    nodes.push_back(rightNode);
+
+    // Process parent node
+    splitNode(childIndex);
+    splitNode(childIndex+1);
+
+}
+
+void BVHMesh::buildBVH(uint32_t leafSize){
+    // Set the max number of triangles per box
+    leafMaxSize = std::max<uint32_t>(1, leafSize);
+    
+    // Make sure we are dealing with triangles
+    if(indices.size() % 3 != 0){
+        fprintf(stderr, "BVHMesh:buildBVH - Cant resolve triangles from given indices");
+       return; 
+    }
+
+    uint32_t triCount = (uint32_t)(indices.size() / 3);
+    
+    nodes.clear();
+    
+    Node parentNode = Node{AABB(vertices), 0, indices};
+    nodes.push_back(parentNode);
+
+    splitNode(0);
+    
 
 }
