@@ -323,3 +323,93 @@ void BVHMesh::buildBVH(uint32_t leafSize){
     
 
 }
+
+static inline void appendAABBWireframe(
+    std::vector<glm::vec3>& out,
+    const glm::vec3& bmin,
+    const glm::vec3& bmax
+){
+    // 8 corners
+    glm::vec3 c000(bmin.x, bmin.y, bmin.z);
+    glm::vec3 c100(bmax.x, bmin.y, bmin.z);
+    glm::vec3 c010(bmin.x, bmax.y, bmin.z);
+    glm::vec3 c110(bmax.x, bmax.y, bmin.z);
+
+    glm::vec3 c001(bmin.x, bmin.y, bmax.z);
+    glm::vec3 c101(bmax.x, bmin.y, bmax.z);
+    glm::vec3 c011(bmin.x, bmax.y, bmax.z);
+    glm::vec3 c111(bmax.x, bmax.y, bmax.z);
+
+    auto addEdge = [&](const glm::vec3& a, const glm::vec3& b){
+        out.push_back(a);
+        out.push_back(b);
+    };
+
+    // bottom rectangle (z = bmin.z)
+    addEdge(c000, c100);
+    addEdge(c100, c110);
+    addEdge(c110, c010);
+    addEdge(c010, c000);
+
+    // top rectangle (z = bmax.z)
+    addEdge(c001, c101);
+    addEdge(c101, c111);
+    addEdge(c111, c011);
+    addEdge(c011, c001);
+
+    // vertical edges
+    addEdge(c000, c001);
+    addEdge(c100, c101);
+    addEdge(c110, c111);
+    addEdge(c010, c011);
+}
+
+
+void BVHMesh::simpleRender(){
+    debugLines.reserve(nodes.size() * 24); // 24 verts per box (12 edges)
+    for(const auto n: nodes){
+        appendAABBWireframe(debugLines, n.box.bmin, n.box.bmax);
+    }
+}
+
+
+// Ray-AABB via Slab method : https://tavianator.com/2022/ray_box_boundary.html
+bool rayAABB_slab(const glm::vec3& ro, const glm::vec3& rd, const AABB& aabb){
+    glm::vec3 invD = 1.0f / rd;  // beware zeros; see below
+    glm::vec3 t0s = (aabb.bmin - ro) * invD;
+    glm::vec3 t1s = (aabb.bmax - ro) * invD;
+
+    glm::vec3 tsmaller = glm::min(t0s, t1s);
+    glm::vec3 tbigger  = glm::max(t0s, t1s);
+
+    float tmin = std::max(std::max(tsmaller.x, tsmaller.y), tsmaller.z);
+    float tmax = std::min(std::min(tbigger.x,  tbigger.y),  tbigger.z);
+
+    return tmax >= std::max(tmin, 0.0f);
+
+}
+
+void BVHMesh::recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
+    bool hit = rayAABB_slab(ro, rd, nodes[NodeIdx].box);
+
+    if(hit==false){
+        return;
+    }
+
+    if (nodes[NodeIdx].ChildIndex == 0){
+        return;
+    }
+    appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
+
+    recursiveHitProgram(nodes[NodeIdx].ChildIndex, ro, rd);
+    recursiveHitProgram(nodes[NodeIdx].ChildIndex+1, ro, rd);
+}
+
+
+bool BVHMesh::raycast(const glm::vec3& ro, const glm::vec3& rd){
+    debugLines.clear();
+    
+    recursiveHitProgram(0, ro, rd);
+
+    return true;
+}

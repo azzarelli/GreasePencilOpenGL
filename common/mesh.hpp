@@ -48,9 +48,20 @@ class AABB{
         int longest_axis();    
 };
 
+bool rayAABB_slab(const glm::vec3& ro, const glm::vec3& rd, const AABB& aabb);
+
 class BVHMesh : public BaseMesh{
     public:
         void buildBVH(uint32_t leafSize);
+        void simpleRender();
+
+        struct Hit { float t; uint32_t triId; };
+
+        bool raycast(const glm::vec3& ro, const glm::vec3& rd);
+
+        void recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
+
+        std::vector<glm::vec3> debugLines;
     
     private:
         struct Node{

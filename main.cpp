@@ -71,6 +71,7 @@ int main(){
 
     // Compile Shaders
     GLuint programID = LoadShaders( "shaders/vertexShader.glsl", "shaders/fragmentShader.glsl" );
+    GLuint debugBVHProgramID = LoadShaders( "shaders/debugBVH.vert", "shaders/debugBVH.frag" );
 
 
     mat4 ModelMatrix = translate(mat4(1.0f), vec3(0.0f, 0.0f, 0.0f)); // At the origin w/ identity
@@ -83,11 +84,12 @@ int main(){
     GLuint ModelViewID = glGetUniformLocation(programID, "MV"); // Init model transform 
     GLuint LightPosID = glGetUniformLocation(programID, "LightPosition_worldspace"); // Init model transform 
 
+    GLuint BVHMatrixID = glGetUniformLocation(debugBVHProgramID, "MVP"); // Init full cam transform
+    GLuint BVHColID = glGetUniformLocation(debugBVHProgramID, "uColor"); // Init full cam transform
 
     BVHMesh basemesh;
     basemesh.load("../assets/Person.obj","../assets/uvmap.DDS", programID);
     basemesh.buildBVH((uint32_t) 4);
-
 
     GLuint lineVAO=0, lineVBO=0;
     glGenVertexArrays(1, &lineVAO);
@@ -102,6 +104,7 @@ int main(){
 
     glBindVertexArray(0);
 
+    mat4 invModelMatrix = inverse(ModelMatrix);
 
     // Define light position
     do{
@@ -112,8 +115,11 @@ int main(){
         computeMatricesFromInputs();
         mat4 ProjectionMatrix = getProjectionMatrix();
         mat4 ViewMatrix = getViewMatrix();
+        mat4 invViewMatrix = inverse(ViewMatrix);
 
         mat4 mvp = ProjectionMatrix * ViewMatrix * ModelMatrix;
+        mat4 invMVP = inverse(mvp);
+
         mat4 mv = ViewMatrix * ModelMatrix;
 
         glUseProgram(programID);
@@ -125,7 +131,38 @@ int main(){
         glUniform3fv(LightPosID, 1, &lightPos[0]);
         
         basemesh.step();
+
+        // BVH debugging
+        float x = 0.0f; // NDC x in [-1,1]
+        float y = 0.0f; // NDC y in [-1,1]
+
+        glm::vec4 nearH = invMVP * glm::vec4(x, y, -1.0f, 1.0f);
+        glm::vec4 farH  = invMVP * glm::vec4(x, y,  1.0f, 1.0f);
+
+        glm::vec3 nearP = glm::vec3(nearH) / nearH.w;
+        glm::vec3 farP  = glm::vec3(farH)  / farH.w;
+
+        glm::vec3 rayDir_world = glm::normalize(farP - nearP);
+        glm::vec3 rayOrig_world = nearP;
+        glm::vec3 rayOrig_model = glm::vec3(invModelMatrix * glm::vec4(rayOrig_world, 1.0f));
+        glm::vec3 rayDir_model  = glm::normalize(glm::vec3(invModelMatrix * glm::vec4(rayDir_world, 0.0f)));
+
+        basemesh.raycast(rayOrig_model, rayDir_model);
         
+
+        glUseProgram(debugBVHProgramID);
+        glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
+        glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f); // red-ish
+        glBindVertexArray(lineVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+        glBufferData(GL_ARRAY_BUFFER,
+                    basemesh.debugLines.size() * sizeof(glm::vec3),
+                    basemesh.debugLines.data(),
+                    GL_DYNAMIC_DRAW);
+
+        // draw all segments
+        glDrawArrays(GL_LINES, 0, (GLsizei)basemesh.debugLines.size());
+
 		// Swap buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
