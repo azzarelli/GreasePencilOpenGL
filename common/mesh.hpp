@@ -59,7 +59,7 @@ class BVHMesh : public BaseMesh{
 
         bool raycast(const glm::vec3& ro, const glm::vec3& rd);
 
-        uint32_t recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
+        void recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
 
         std::vector<glm::vec3> debugLines;
 
@@ -75,9 +75,14 @@ class BVHMesh : public BaseMesh{
             std::vector<unsigned int> indices;
         };
 
+        std::vector<uint32_t> tempNodeBuffer;
+
+
         void splitNode(uint32_t ParentIdx);
 
         bool rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
+
+        void surfaceTraversal();
 
     protected:
         uint32_t leafMaxSize;

@@ -12,6 +12,8 @@ BaseMesh::BaseMesh(){
     // TODO constructor
 }
 
+inline bool DEBUG = true;
+
 void BaseMesh::load(std::string filePath, const char* filePathDSS, GLuint programID){
     glGenVertexArrays(1, &VertexArrayID);
     glBindVertexArray(VertexArrayID);
@@ -324,6 +326,7 @@ void BVHMesh::buildBVH(uint32_t leafSize){
 
 }
 
+
 static inline void appendAABBWireframe(
     std::vector<glm::vec3>& out,
     const glm::vec3& bmin,
@@ -364,6 +367,17 @@ static inline void appendAABBWireframe(
     addEdge(c010, c011);
 }
 
+static inline void appendEdge(
+    std::vector<glm::vec3>& out,
+    const glm::vec3& a,
+    const glm::vec3& b
+){
+
+    // bottom rectangle (z = bmin.z)
+    out.push_back(a);
+    out.push_back(b);
+}
+
 
 void BVHMesh::simpleRender(){
     debugLines.reserve(nodes.size() * 24); // 24 verts per box (12 edges)
@@ -389,29 +403,30 @@ bool rayAABB_slab(const glm::vec3& ro, const glm::vec3& rd, const AABB& aabb){
 
 }
 
-uint32_t BVHMesh::recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
+void BVHMesh::recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
     bool hit = rayAABB_slab(ro, rd, nodes[NodeIdx].box);
 
     if(hit==false){
-        return (uint32_t) 0;
+        return;
     }
 
     // if a child is hit
     if (nodes[NodeIdx].ChildIndex == 0){
-        return NodeIdx;
+        tempNodeBuffer.push_back(NodeIdx);
+        return;
     }
-    // appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
 
-    uint32_t lhit = recursiveHitProgram(nodes[NodeIdx].ChildIndex, ro, rd);
-    if(lhit != 0){
-        return lhit;
-    }
-    uint32_t rhit = recursiveHitProgram(nodes[NodeIdx].ChildIndex+1, ro, rd);
-    return rhit;
+    recursiveHitProgram(nodes[NodeIdx].ChildIndex, ro, rd);
+    recursiveHitProgram(nodes[NodeIdx].ChildIndex+1, ro, rd);
 }
 
 bool BVHMesh::rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
     // For each triangle in the node
+
+    if(DEBUG){
+        appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
+    }
+
 
     uint32_t triCount = nodes[NodeIdx].indices.size() /3;
     bool success = false;
@@ -459,6 +474,16 @@ bool BVHMesh::rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const g
     return success;    
 }
 
+void BVHMesh::surfaceTraversal(){
+    if(drawPoints.size() > 2){
+        glm::vec3 A = drawPoints[-2];
+        glm::vec3 B = drawPoints[-1];
+
+        std::array<unsigned int, 3> A_triIndices = drawTriIndices[-2];
+
+        appendEdge(debugLines, A, B);
+    }
+}
 
 float x = 0.0f; // NDC x in [-1,1]
 float y = 0.0f; // NDC y in [-1,1]
@@ -473,23 +498,46 @@ void BVHMesh::loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix){
     glm::vec3 rayOrig_world = nearP;
     glm::vec3 rayOrig_model = glm::vec3(InvModelMatrix * glm::vec4(rayOrig_world, 1.0f));
     glm::vec3 rayDir_model  = glm::normalize(glm::vec3(InvModelMatrix * glm::vec4(rayDir_world, 0.0f)));
+    
+    printf("%lu \n", drawPoints.size());
 
-    uint32_t NodeIdx = recursiveHitProgram(0, rayOrig_model, rayDir_model);
-    printf("%u \n", NodeIdx);
+    tempNodeBuffer.clear();
+    recursiveHitProgram(0, rayOrig_model, rayDir_model);
+
 
     // Nothing to add
-    if(NodeIdx == 0){
+    if(tempNodeBuffer.size() < 1){
         return;
     }
-    printf("pre hit\n");
+
+
+    // Loop through all ChildNodes along our ray and select the one closest to the cam-center
+    float distMax = 1e30;
+    uint32_t NodeIdx = 1000;
+    for(const auto& nidx: tempNodeBuffer){
+        glm::vec3 dist = nodes[nidx].box.centroid - rayOrig_model; // distances
+        float distEul = glm::length(dist);
+        if(distEul < distMax){
+            distMax = distEul;
+            NodeIdx = nidx;
+        }
+    }
+    if(NodeIdx > 1e9){
+        return;
+    }
+
+    // uint32_t NodeIdx = tempNodeBuffer[-1];
+
 
     // Check + upload intersections to the buffer
     bool hit = rayNodeIntersection(NodeIdx, rayOrig_model, rayDir_model);
+    printf("Added \n");
+
     if(hit == false){
         return;
     }
-
-    printf("hit\n");
+    surfaceTraversal();
+    // 
     // Intersection algorithm for rayOrigin, rayDirection, to get the intersected triangle
 
 

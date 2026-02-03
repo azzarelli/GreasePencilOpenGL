@@ -91,7 +91,7 @@ int main(){
 
     BVHMesh basemesh;
     basemesh.load("../assets/Person.obj","../assets/uvmap.DDS", programID);
-    basemesh.buildBVH((uint32_t) 4);
+    basemesh.buildBVH((uint32_t) 24);
 
     GLuint lineVAO=0, lineVBO=0;
     glGenVertexArrays(1, &lineVAO);
@@ -136,25 +136,23 @@ int main(){
         
         if(flag_loadNewPoint2Draw){
             basemesh.loadNewDrawPoint(invMVP, invModelMatrix);
-
-            // reset flag
             flag_loadNewPoint2Draw = false;
         }
 
         
 
-        // glUseProgram(debugBVHProgramID);
-        // glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
-        // glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f); // red-ish
-        // glBindVertexArray(lineVAO);
-        // glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
-        // glBufferData(GL_ARRAY_BUFFER,
-        //             basemesh.debugLines.size() * sizeof(glm::vec3),
-        //             basemesh.debugLines.data(),
-        //             GL_DYNAMIC_DRAW);
+        glUseProgram(debugBVHProgramID);
+        glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
+        glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f); // red-ish
+        glBindVertexArray(lineVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+        glBufferData(GL_ARRAY_BUFFER,
+                    basemesh.debugLines.size() * sizeof(glm::vec3),
+                    basemesh.debugLines.data(),
+                    GL_DYNAMIC_DRAW);
 
-        // // draw all segments
-        // glDrawArrays(GL_LINES, 0, (GLsizei)basemesh.debugLines.size());
+        // draw all segments
+        glDrawArrays(GL_LINES, 0, (GLsizei)basemesh.debugLines.size());
 
 		// Swap buffers
 		glfwSwapBuffers(window);
