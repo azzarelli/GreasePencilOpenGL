@@ -16,4 +16,4 @@ Current Work:
 - A CPU-BVH implementation with a depth-ordered equal split strategy
 - A Ray-AABB debugging visualization for ray-BVHnode intersection
 - A Ray-AABB traversal with the SLAB method to collect intersected BVHnodes
-- Mouse-click to pick a surface position
+- Moeller-Trumbore alg (glm::glx::intersect.h) for triangle picking
