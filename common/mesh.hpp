@@ -59,10 +59,15 @@ class BVHMesh : public BaseMesh{
 
         bool raycast(const glm::vec3& ro, const glm::vec3& rd);
 
-        void recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
+        uint32_t recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
 
         std::vector<glm::vec3> debugLines;
-    
+
+        std::vector<glm::vec3> drawPoints;
+        std::vector<std::array<unsigned int, 3>> drawTriIndices;
+
+        void loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix) ;
+            
     private:
         struct Node{
             AABB box;
@@ -72,9 +77,14 @@ class BVHMesh : public BaseMesh{
 
         void splitNode(uint32_t ParentIdx);
 
+        bool rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
+
+    protected:
         uint32_t leafMaxSize;
 
         std::vector<Node> nodes;
         std::vector<uint32_t> triangleOrder;
+
+
 
 };

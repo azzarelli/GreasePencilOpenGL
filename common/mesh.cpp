@@ -389,27 +389,112 @@ bool rayAABB_slab(const glm::vec3& ro, const glm::vec3& rd, const AABB& aabb){
 
 }
 
-void BVHMesh::recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
+uint32_t BVHMesh::recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
     bool hit = rayAABB_slab(ro, rd, nodes[NodeIdx].box);
 
     if(hit==false){
-        return;
+        return (uint32_t) 0;
     }
 
+    // if a child is hit
     if (nodes[NodeIdx].ChildIndex == 0){
-        return;
+        return NodeIdx;
     }
-    appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
+    // appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
 
-    recursiveHitProgram(nodes[NodeIdx].ChildIndex, ro, rd);
-    recursiveHitProgram(nodes[NodeIdx].ChildIndex+1, ro, rd);
+    uint32_t lhit = recursiveHitProgram(nodes[NodeIdx].ChildIndex, ro, rd);
+    if(lhit != 0){
+        return lhit;
+    }
+    uint32_t rhit = recursiveHitProgram(nodes[NodeIdx].ChildIndex+1, ro, rd);
+    return rhit;
+}
+
+bool BVHMesh::rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
+    // For each triangle in the node
+
+    uint32_t triCount = nodes[NodeIdx].indices.size() /3;
+    bool success = false;
+    for(uint32_t i=0; i<triCount; i++){
+        // Read-only and no copy
+        const glm::vec3& v0 = vertices[nodes[NodeIdx].indices[i*3 + 0]];
+        const glm::vec3& v1 = vertices[nodes[NodeIdx].indices[i*3 + 1]];
+        const glm::vec3& v2 = vertices[nodes[NodeIdx].indices[i*3 + 2]];
+        
+        // Ray-Intersection
+        // If we find an intersection, we can progress
+
+        glm::vec3 e1 = v1-v0;
+        glm::vec3 e2 = v2-v0;
+        
+        glm::vec3 p = glm::cross(rd, e2);
+        float det = glm::dot(e1, p);
+
+        // If you want backface culling,
+        if (fabs(det) > 1e-8){// if our det > 0 the triangle is the correct orientation
+            float invDet = 1.0f / det;
+            glm::vec3 s = ro - v0;
+            float u = glm::dot(s, p) * invDet;
+
+            if (u > 0.0f && u < 1.0f){
+                glm::vec3 q = glm::cross(s, e1);
+                float v = glm::dot(rd, q) * invDet;
+                if (v > 0.0f && (u + v) < 1.0f){
+                    float t = glm::dot(e2, q) * invDet;
+                    
+                    if(t > 0.0f){//We have our triangle
+                        glm::vec3 hitPoint = ro+t*rd;
+                        drawPoints.push_back(hitPoint);
+
+                        std::array<unsigned int, 3> dIndList = {nodes[NodeIdx].indices[i*3], nodes[NodeIdx].indices[i*3+1], nodes[NodeIdx].indices[i*3+2]};
+                        drawTriIndices.push_back(dIndList);
+                        success = true;
+                        break;
+                    }
+                }
+
+            }            
+        }
+    }
+    return success;    
 }
 
 
-bool BVHMesh::raycast(const glm::vec3& ro, const glm::vec3& rd){
-    debugLines.clear();
-    
-    recursiveHitProgram(0, ro, rd);
+float x = 0.0f; // NDC x in [-1,1]
+float y = 0.0f; // NDC y in [-1,1]
+void BVHMesh::loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix){
+    glm::vec4 nearH = InvMVP * glm::vec4(x, y, -1.0f, 1.0f);
+    glm::vec4 farH  = InvMVP * glm::vec4(x, y,  1.0f, 1.0f);
 
-    return true;
+    glm::vec3 nearP = glm::vec3(nearH) / nearH.w;
+    glm::vec3 farP  = glm::vec3(farH)  / farH.w;
+
+    glm::vec3 rayDir_world = glm::normalize(farP - nearP);
+    glm::vec3 rayOrig_world = nearP;
+    glm::vec3 rayOrig_model = glm::vec3(InvModelMatrix * glm::vec4(rayOrig_world, 1.0f));
+    glm::vec3 rayDir_model  = glm::normalize(glm::vec3(InvModelMatrix * glm::vec4(rayDir_world, 0.0f)));
+
+    uint32_t NodeIdx = recursiveHitProgram(0, rayOrig_model, rayDir_model);
+    printf("%u \n", NodeIdx);
+
+    // Nothing to add
+    if(NodeIdx == 0){
+        return;
+    }
+    printf("pre hit\n");
+
+    // Check + upload intersections to the buffer
+    bool hit = rayNodeIntersection(NodeIdx, rayOrig_model, rayDir_model);
+    if(hit == false){
+        return;
+    }
+
+    printf("hit\n");
+    // Intersection algorithm for rayOrigin, rayDirection, to get the intersected triangle
+
+
+    // drawPoints.push_back(point);
+    // drawTriIndices.push_back(triInd);
+
+    // We have a new line to solve
 }

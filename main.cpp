@@ -49,12 +49,14 @@ int main(){
 
     glfwMakeContextCurrent(window);
     glewExperimental=true;
-    if (glewInit() != GLEW_OK){
+    if (glewInit() != GLEW_OK){ 
         fprintf(stderr, "Failer to init GLEW");
         return -1;
     }
 
     glfwSetScrollCallback(window, scroll_callback);
+    
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
 
     // To stop window from autoclosing - lol
     glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -131,37 +133,28 @@ int main(){
         glUniform3fv(LightPosID, 1, &lightPos[0]);
         
         basemesh.step();
+        
+        if(flag_loadNewPoint2Draw){
+            basemesh.loadNewDrawPoint(invMVP, invModelMatrix);
 
-        // BVH debugging
-        float x = 0.0f; // NDC x in [-1,1]
-        float y = 0.0f; // NDC y in [-1,1]
+            // reset flag
+            flag_loadNewPoint2Draw = false;
+        }
 
-        glm::vec4 nearH = invMVP * glm::vec4(x, y, -1.0f, 1.0f);
-        glm::vec4 farH  = invMVP * glm::vec4(x, y,  1.0f, 1.0f);
-
-        glm::vec3 nearP = glm::vec3(nearH) / nearH.w;
-        glm::vec3 farP  = glm::vec3(farH)  / farH.w;
-
-        glm::vec3 rayDir_world = glm::normalize(farP - nearP);
-        glm::vec3 rayOrig_world = nearP;
-        glm::vec3 rayOrig_model = glm::vec3(invModelMatrix * glm::vec4(rayOrig_world, 1.0f));
-        glm::vec3 rayDir_model  = glm::normalize(glm::vec3(invModelMatrix * glm::vec4(rayDir_world, 0.0f)));
-
-        basemesh.raycast(rayOrig_model, rayDir_model);
         
 
-        glUseProgram(debugBVHProgramID);
-        glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
-        glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f); // red-ish
-        glBindVertexArray(lineVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
-        glBufferData(GL_ARRAY_BUFFER,
-                    basemesh.debugLines.size() * sizeof(glm::vec3),
-                    basemesh.debugLines.data(),
-                    GL_DYNAMIC_DRAW);
+        // glUseProgram(debugBVHProgramID);
+        // glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
+        // glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f); // red-ish
+        // glBindVertexArray(lineVAO);
+        // glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+        // glBufferData(GL_ARRAY_BUFFER,
+        //             basemesh.debugLines.size() * sizeof(glm::vec3),
+        //             basemesh.debugLines.data(),
+        //             GL_DYNAMIC_DRAW);
 
-        // draw all segments
-        glDrawArrays(GL_LINES, 0, (GLsizei)basemesh.debugLines.size());
+        // // draw all segments
+        // glDrawArrays(GL_LINES, 0, (GLsizei)basemesh.debugLines.size());
 
 		// Swap buffers
 		glfwSwapBuffers(window);

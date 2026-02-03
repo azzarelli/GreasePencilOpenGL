@@ -8,7 +8,7 @@ extern GLFWwindow* window; // The "extern" keyword here is to access the variabl
 using namespace glm;
 
 #include "controls.hpp"
-
+#include <stdio.h>
 
 glm::mat4 ViewMatrix;
 glm::mat4 ProjectionMatrix;
@@ -32,7 +32,9 @@ float initialFoV = 60.0f;
 float speed = 0.05f; // 3 units / second
 float mouseSpeed = 0.0005f;
 
-float FoV = initialFoV; 
+float FoV = initialFoV;
+
+
 
 // Before starting we need a way to define the scroll wheel inputs
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
@@ -108,4 +110,15 @@ void computeMatricesFromInputs(){
         up                  // Head is up (set to 0,-1,0 to look upside-down)
     );
 
+}
+
+
+bool flag_loadNewPoint2Draw = false;
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{   
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        flag_loadNewPoint2Draw = true;
+    }
 }
