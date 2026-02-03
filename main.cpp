@@ -139,7 +139,7 @@ int main(){
             flag_loadNewPoint2Draw = false;
         }
 
-        
+
 
         glUseProgram(debugBVHProgramID);
         glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
@@ -152,7 +152,7 @@ int main(){
                     GL_DYNAMIC_DRAW);
 
         // draw all segments
-        glDrawArrays(GL_LINES, 0, (GLsizei)basemesh.debugLines.size());
+        glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)basemesh.debugLines.size());
 
 		// Swap buffers
 		glfwSwapBuffers(window);

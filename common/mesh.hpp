@@ -53,11 +53,8 @@ bool rayAABB_slab(const glm::vec3& ro, const glm::vec3& rd, const AABB& aabb);
 class BVHMesh : public BaseMesh{
     public:
         void buildBVH(uint32_t leafSize);
-        void simpleRender();
 
         struct Hit { float t; uint32_t triId; };
-
-        bool raycast(const glm::vec3& ro, const glm::vec3& rd);
 
         void recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
 
@@ -82,6 +79,7 @@ class BVHMesh : public BaseMesh{
 
         bool rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd);
 
+        bool rayNodeClosestHit(uint32_t NodeIdx,const glm::vec3& ro,const glm::vec3& rd,float& outT,uint32_t& outTriBase );
         void surfaceTraversal();
 
     protected:

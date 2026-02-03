@@ -5,6 +5,7 @@
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
+#include <glm/gtx/intersect.hpp>
 
 Assimp::Importer importer;
 
@@ -12,7 +13,7 @@ BaseMesh::BaseMesh(){
     // TODO constructor
 }
 
-inline bool DEBUG = true;
+inline bool DEBUG = false;
 
 void BaseMesh::load(std::string filePath, const char* filePathDSS, GLuint programID){
     glGenVertexArrays(1, &VertexArrayID);
@@ -323,6 +324,7 @@ void BVHMesh::buildBVH(uint32_t leafSize){
 
     splitNode(0);
     
+    debugLines.reserve(nodes.size() * 2);
 
 }
 
@@ -372,20 +374,9 @@ static inline void appendEdge(
     const glm::vec3& a,
     const glm::vec3& b
 ){
-
-    // bottom rectangle (z = bmin.z)
     out.push_back(a);
     out.push_back(b);
 }
-
-
-void BVHMesh::simpleRender(){
-    debugLines.reserve(nodes.size() * 24); // 24 verts per box (12 edges)
-    for(const auto n: nodes){
-        appendAABBWireframe(debugLines, n.box.bmin, n.box.bmax);
-    }
-}
-
 
 // Ray-AABB via Slab method : https://tavianator.com/2022/ray_box_boundary.html
 bool rayAABB_slab(const glm::vec3& ro, const glm::vec3& rd, const AABB& aabb){
@@ -423,66 +414,71 @@ void BVHMesh::recursiveHitProgram(uint32_t NodeIdx, const glm::vec3& ro, const g
 bool BVHMesh::rayNodeIntersection(uint32_t NodeIdx, const glm::vec3& ro, const glm::vec3& rd){
     // For each triangle in the node
 
-    if(DEBUG){
-        appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
-    }
-
-
     uint32_t triCount = nodes[NodeIdx].indices.size() /3;
-    bool success = false;
     for(uint32_t i=0; i<triCount; i++){
         // Read-only and no copy
+        const glm::vec3& v0 = vertices[nodes[NodeIdx].indices[i*3]];
+        const glm::vec3& v1 = vertices[nodes[NodeIdx].indices[i*3+1]];
+        const glm::vec3& v2 = vertices[nodes[NodeIdx].indices[i*3+2]];
+        
+        glm::vec2 bary;
+        float t;
+        bool hit = glm::intersectRayTriangle(ro, rd, v0, v1, v2, bary, t);
+        if (hit){
+            glm::vec3 hitPoint = ro+(t)*rd;
+            debugLines.push_back(hitPoint);
+
+            std::array<unsigned int, 3> dIndList = {nodes[NodeIdx].indices[i*3], nodes[NodeIdx].indices[i*3+1], nodes[NodeIdx].indices[i*3+2]};
+            appendAABBWireframe(debugLines, nodes[NodeIdx].box.bmin, nodes[NodeIdx].box.bmax);
+
+            drawTriIndices.push_back(dIndList);
+            return true;
+
+        }
+
+    }
+    return false;    
+}
+
+bool BVHMesh::rayNodeClosestHit(uint32_t NodeIdx,const glm::vec3& ro,const glm::vec3& rd,float& outT,uint32_t& outTriBase ){
+    bool anyHit = false;
+    float bestT = 1e30f;
+    uint32_t bestBase = 0;
+
+    uint32_t triCount = (uint32_t)(nodes[NodeIdx].indices.size() / 3);
+    for (uint32_t i = 0; i < triCount; i++) {
         const glm::vec3& v0 = vertices[nodes[NodeIdx].indices[i*3 + 0]];
         const glm::vec3& v1 = vertices[nodes[NodeIdx].indices[i*3 + 1]];
         const glm::vec3& v2 = vertices[nodes[NodeIdx].indices[i*3 + 2]];
-        
-        // Ray-Intersection
-        // If we find an intersection, we can progress
 
-        glm::vec3 e1 = v1-v0;
-        glm::vec3 e2 = v2-v0;
-        
-        glm::vec3 p = glm::cross(rd, e2);
-        float det = glm::dot(e1, p);
+        glm::vec2 bary;
+        float t;
+        bool hit = glm::intersectRayTriangle(ro, rd, v0, v1, v2, bary, t);
 
-        // If you want backface culling,
-        if (fabs(det) > 1e-8){// if our det > 0 the triangle is the correct orientation
-            float invDet = 1.0f / det;
-            glm::vec3 s = ro - v0;
-            float u = glm::dot(s, p) * invDet;
-
-            if (u > 0.0f && u < 1.0f){
-                glm::vec3 q = glm::cross(s, e1);
-                float v = glm::dot(rd, q) * invDet;
-                if (v > 0.0f && (u + v) < 1.0f){
-                    float t = glm::dot(e2, q) * invDet;
-                    
-                    if(t > 0.0f){//We have our triangle
-                        glm::vec3 hitPoint = ro+t*rd;
-                        drawPoints.push_back(hitPoint);
-
-                        std::array<unsigned int, 3> dIndList = {nodes[NodeIdx].indices[i*3], nodes[NodeIdx].indices[i*3+1], nodes[NodeIdx].indices[i*3+2]};
-                        drawTriIndices.push_back(dIndList);
-                        success = true;
-                        break;
-                    }
-                }
-
-            }            
+        // IMPORTANT: only accept hits in front of the ray origin
+        if (hit && t > 0.0f && t < bestT) {
+            bestT = t;
+            bestBase = i * 3;
+            anyHit = true;
         }
     }
-    return success;    
+
+    if (!anyHit) return false;
+
+    outT = bestT;
+    outTriBase = bestBase;
+    return true;
 }
 
 void BVHMesh::surfaceTraversal(){
-    if(drawPoints.size() > 2){
-        glm::vec3 A = drawPoints[-2];
-        glm::vec3 B = drawPoints[-1];
+    // if(drawPoints.size() > 2){
+    glm::vec3 A = drawPoints[-2];
+    glm::vec3 B = drawPoints[-1];
 
-        std::array<unsigned int, 3> A_triIndices = drawTriIndices[-2];
+    std::array<unsigned int, 3> A_triIndices = drawTriIndices[-2];
 
-        appendEdge(debugLines, A, B);
-    }
+    // appendEdge(debugLines, A, B);
+    // }
 }
 
 float x = 0.0f; // NDC x in [-1,1]
@@ -499,7 +495,7 @@ void BVHMesh::loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix){
     glm::vec3 rayOrig_model = glm::vec3(InvModelMatrix * glm::vec4(rayOrig_world, 1.0f));
     glm::vec3 rayDir_model  = glm::normalize(glm::vec3(InvModelMatrix * glm::vec4(rayDir_world, 0.0f)));
     
-    printf("%lu \n", drawPoints.size());
+    printf("Num Draw Points%lu \n", debugLines.size());
 
     tempNodeBuffer.clear();
     recursiveHitProgram(0, rayOrig_model, rayDir_model);
@@ -510,39 +506,42 @@ void BVHMesh::loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix){
         return;
     }
 
+    printf("tempsize %u \n", tempNodeBuffer.size());
+    float bestT = 1e30f;
+    uint32_t bestNode = 0;
+    uint32_t bestTriBase = 0;
+    bool anyHit = false;
 
-    // Loop through all ChildNodes along our ray and select the one closest to the cam-center
-    float distMax = 1e30;
-    uint32_t NodeIdx = 1000;
-    for(const auto& nidx: tempNodeBuffer){
-        glm::vec3 dist = nodes[nidx].box.centroid - rayOrig_model; // distances
-        float distEul = glm::length(dist);
-        if(distEul < distMax){
-            distMax = distEul;
-            NodeIdx = nidx;
+    for (uint32_t nidx : tempNodeBuffer) {
+        float t;
+        uint32_t triBase;
+        if (rayNodeClosestHit(nidx, rayOrig_model, rayDir_model, t, triBase)) {
+            if (t < bestT) {
+                bestT = t;
+                bestNode = nidx;
+                bestTriBase = triBase;
+                anyHit = true;
+            }
         }
     }
-    if(NodeIdx > 1e9){
+
+    if (!anyHit) {
+        printf("No triangle hit in candidate leaves\n");
         return;
     }
 
-    // uint32_t NodeIdx = tempNodeBuffer[-1];
+    glm::vec3 hitPoint = rayOrig_model + bestT * rayDir_model;
+    debugLines.push_back(hitPoint);
+    
+    // optional: draw the leaf AABB
+    appendAABBWireframe(debugLines, nodes[bestNode].box.bmin, nodes[bestNode].box.bmax);
 
+    // store triangle indices (the actual vertex indices)
+    std::array<unsigned int, 3> dIndList = {
+        nodes[bestNode].indices[bestTriBase + 0],
+        nodes[bestNode].indices[bestTriBase + 1],
+        nodes[bestNode].indices[bestTriBase + 2]
+    };
+    drawTriIndices.push_back(dIndList);
 
-    // Check + upload intersections to the buffer
-    bool hit = rayNodeIntersection(NodeIdx, rayOrig_model, rayDir_model);
-    printf("Added \n");
-
-    if(hit == false){
-        return;
-    }
-    surfaceTraversal();
-    // 
-    // Intersection algorithm for rayOrigin, rayDirection, to get the intersected triangle
-
-
-    // drawPoints.push_back(point);
-    // drawTriIndices.push_back(triInd);
-
-    // We have a new line to solve
 }
