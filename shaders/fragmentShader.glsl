@@ -15,9 +15,9 @@ uniform vec3 LightPosition_worldspace;
 
 void main(){
   vec3 LightColor = vec3(1.0f,1.0f,1.0f);
-  float LightPower = 50.0f;
+  float LightPower = 20.0f;
 
-  vec3 MaterialColor = texture(myTextureSampler, UV).rgb;
+  vec3 MaterialColor = vec3(1.0, 1.0, 1.0); // texture(myTextureSampler, UV).rgb * 0.1;
 	vec3 MaterialSpecularColor = vec3(0.3,0.3,0.3);
 
   // distance from lightposition and world space position
@@ -34,7 +34,7 @@ void main(){
 
 
   // Ambient Light, Small increase in material color so its not purely black
-  vec3 MaterialAmbientColor = vec3(0.1,0.1,0.1) * MaterialColor;
+  vec3 MaterialAmbientColor = vec3(0.3,0.3,0.3) * MaterialColor;
 
   // Specular component increases based on parallelity between ray direction and view
   vec3 EyeN = normalize(EyeDirection_cameraspace);

@@ -1,6 +1,6 @@
 # Grease Pencil OpenGL App for plain objects
 
-Implementing a Greese Pencil functionality for drawing 2D shapes over 3D meshes.
+Implementing a Greese Pencil functionality for drawing 2D shapes over 3D meshes
 
 This is for a downstream project + a nice learning experience.
 
@@ -25,3 +25,7 @@ Future Work:
 - (feature) Connect the lines (i.e. a loop) and resolve mesh to minimize volme between the line-surface & mesh.
 - (feature) Estimate best position of N darts for mapping a 3-D surface to a 2-D shape
 - (output) A high-res PNG of our pattern blocks/designs baked on some UV-wrapping rules (need to figure out)
+
+![Alt text](githubassets/cube.png)
+![Alt text](githubassets/ico.png)
+![Alt text](githubassets/face.png)
