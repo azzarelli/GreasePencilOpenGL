@@ -81,9 +81,12 @@ class BVHMesh : public BaseMesh{
 
         bool rayNodeClosestHit(uint32_t NodeIdx,const glm::vec3& ro,const glm::vec3& rd,float& outT,uint32_t& outTriBase );
         void surfaceTraversal();
+        void recursiveTriangleTraversal(glm::vec3 A, glm::vec3 B, std::array<unsigned int, 3> triIndices, int depth);
 
     protected:
         uint32_t leafMaxSize;
+        
+        std::vector<glm::vec3> surfaceNodes;
 
         std::vector<Node> nodes;
         std::vector<uint32_t> triangleOrder;

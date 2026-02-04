@@ -470,15 +470,181 @@ bool BVHMesh::rayNodeClosestHit(uint32_t NodeIdx,const glm::vec3& ro,const glm::
     return true;
 }
 
+int getOtherTriAcrossEdge(unsigned int e0, unsigned int e1, unsigned int alpha, const std::vector<unsigned int>& indices){
+    
+    const int triCount = (int)indices.size() / 3;
+    
+    bool hasOrder;
+    for (int t = 0; t < triCount; ++t) {
+        uint32_t a = indices[3*t + 0];
+        uint32_t b = indices[3*t + 1];
+        uint32_t c = indices[3*t + 2];
+        
+        hasOrder = false;
+        if(alpha == 0) hasOrder = (a == e0) && (b == e1);
+        else if(alpha == 1) hasOrder = (a == e0) && (c == e1);
+        else if(alpha == 2) hasOrder = (b == e0) && (c == e1);
+        
+        if(hasOrder) continue;
+
+        bool hasE0 = (a == e0) || (b == e0) || (c == e0);
+        bool hasE1 = (a == e1) || (b == e1) || (c == e1);
+
+        if (hasE0 && hasE1) {
+            return t*3;
+        }
+    }
+
+    return -1;
+}
+
+
+float epsT = 1e-10;
+void BVHMesh::recursiveTriangleTraversal(glm::vec3 A, glm::vec3 B, std::array<unsigned int, 3> triIndices, int depth ){
+    if (depth > 1024) { printf("Traversal depth exceeded\n"); return; }
+    
+    auto maxV = vertices.size();
+    if (triIndices[0] >= maxV || triIndices[1] >= maxV || triIndices[2] >= maxV) {
+        printf("Bad triIndices: %u %u %u (verts=%zu)\n",
+            triIndices[0], triIndices[1], triIndices[2], maxV);
+        return;
+    }
+
+   
+    // Get current triangle vertices
+    unsigned int i0 = triIndices[0];
+    unsigned int i1 = triIndices[1];
+    unsigned int i2 = triIndices[2];
+    const glm::vec3& v0 = vertices[i0];
+    const glm::vec3& v1 = vertices[i1];
+    const glm::vec3& v2 = vertices[i2];
+
+    glm::vec3 n3 = glm::cross(v1 - v0, v2 - v0);
+    float nLen2 = glm::dot(n3,n3);
+    if (nLen2 < 1e-20f) return;
+    glm::vec3 n = n3 / glm::sqrt(nLen2);
+
+    auto projectToPlane = [&](const glm::vec3& P){
+        float d = glm::dot(n, P - v0);
+        return P - n * d;
+    };
+
+    glm::vec3 Ap = projectToPlane(A);
+    glm::vec3 Bp = projectToPlane(B);
+
+    glm::vec3 e01 = v1 - v0;
+    if (glm::dot(e01, e01) < 1e-20f) return;
+    glm::vec3 uAxis = glm::normalize(e01);
+    glm::vec3 vAxis = glm::normalize(glm::cross(n, uAxis));
+
+    auto to2D = [&](const glm::vec3& P){
+        glm::vec3 x = P - v0;
+        return glm::vec2(glm::dot(x,uAxis), glm::dot(x,vAxis));
+    };
+
+    glm::vec2 a = to2D(Ap);
+    glm::vec2 b = to2D(Bp);
+    glm::vec2 t0 = to2D(v0), t1 = to2D(v1), t2 = to2D(v2);
+
+    auto cross2 = [](const glm::vec2& p, const glm::vec2& q){
+        return p.x*q.y - p.y*q.x;
+    };
+    
+    auto pointInTri2D = [&](const glm::vec2& p){
+        float c1 = cross2(t1 - t0, p - t0);
+        float c2 = cross2(t2 - t1, p - t1);
+        float c3 = cross2(t0 - t2, p - t2);
+        const float eps = 1e-6f;
+        bool hasNeg = (c1 < -eps) || (c2 < -eps) || (c3 < -eps);
+        bool hasPos = (c1 >  eps) || (c2 >  eps) || (c3 >  eps);
+        return !(hasNeg && hasPos);
+    };
+
+    // If B (projected) lies inside current triangle, we’re done
+    if (pointInTri2D(b)) {
+        // optional: append final B as debug
+        debugLines.push_back(Bp); // or B, depending on what you want
+        return;
+    }
+
+    auto segSegIntersect2D = [&](const glm::vec2& p, const glm::vec2& p2,
+                                const glm::vec2& q, const glm::vec2& q2,
+                                float& tOut) -> bool
+    {
+        glm::vec2 r = p2 - p;
+        glm::vec2 s = q2 - q;
+        float den = cross2(r, s);
+        if (fabs(den) < 1e-12f) return false;
+
+        glm::vec2 qp = q - p;
+        float t = cross2(qp, s) / den;
+        float u = cross2(qp, r) / den;
+        if (t >= 0.f && t <= 1.f && u >= 0.f && u <= 1.f) {
+            tOut = t;
+            return true;
+        }
+        return false;
+    };
+
+    // Find first edge we hit leaving the triangle
+    float bestT = 1e30f;
+    int hitEdge = -1;
+
+
+    float tHit;
+    if (segSegIntersect2D(a, b, t0, t1, tHit) && tHit > epsT && tHit < bestT) { bestT = tHit; hitEdge = 0; }
+    if (segSegIntersect2D(a, b, t1, t2, tHit) && tHit > epsT && tHit < bestT) { bestT = tHit; hitEdge = 1; }
+    if (segSegIntersect2D(a, b, t2, t0, tHit) && tHit > epsT && tHit < bestT) { bestT = tHit; hitEdge = 2; }
+
+    if (hitEdge == -1) {
+        // Usually means numerical issues, or A->B never exits in 2D due to eps.
+        return;
+    }
+
+    // World-space intersection point (on the plane)
+    glm::vec3 I = Ap + (Bp - Ap) * bestT;
+    debugLines.push_back(I);
+
+    // Determine which mesh edge we crossed and hop
+    uint32_t ea, eb;
+    unsigned int eOrd;
+    if (hitEdge == 0) { ea = i0; eb = i1; eOrd=0;}
+    else if (hitEdge == 1) { ea = i1; eb = i2; eOrd=2;}
+    else { eb = i2; ea = i0; eOrd=1;}
+
+    int nextTriIndices = getOtherTriAcrossEdge(ea,eb,  eOrd, indices);
+
+    if (nextTriIndices < 0 || nextTriIndices + 2 >= (int)indices.size()) {
+        printf("Bad nextTriIndices=%d (indices size=%zu)\n", nextTriIndices, indices.size());
+        return;
+    }
+
+
+    std::array<unsigned int, 3> NewIndice = {
+        indices[nextTriIndices + 0],
+        indices[nextTriIndices + 1],
+        indices[nextTriIndices + 2]
+    };
+
+    glm::vec3 dir3 = glm::normalize(B - A);
+    glm::vec3 Iworld = I; // already on surface plane
+
+    // Nudge a tiny distance so we are safely inside the next tri (tune eps)
+    const float stepEps = 1e-4f;
+    glm::vec3 Inext = Iworld + dir3 * 1e-4f;
+    debugLines.push_back(Inext);
+
+    recursiveTriangleTraversal(Inext, B, NewIndice, depth+1);
+
+}
+
+
 void BVHMesh::surfaceTraversal(){
-    // if(drawPoints.size() > 2){
-    glm::vec3 A = drawPoints[-2];
-    glm::vec3 B = drawPoints[-1];
+    glm::vec3 A = surfaceNodes.at(surfaceNodes.size() - 2); // old vertex
+    glm::vec3 B = surfaceNodes.at(surfaceNodes.size() - 1); // newly added point
 
-    std::array<unsigned int, 3> A_triIndices = drawTriIndices[-2];
-
-    // appendEdge(debugLines, A, B);
-    // }
+    std::array<unsigned int, 3> triIndices = drawTriIndices.at(drawTriIndices.size() - 2);
+    recursiveTriangleTraversal(A, B, triIndices, 0);
 }
 
 float x = 0.0f; // NDC x in [-1,1]
@@ -531,10 +697,10 @@ void BVHMesh::loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix){
     }
 
     glm::vec3 hitPoint = rayOrig_model + bestT * rayDir_model;
-    debugLines.push_back(hitPoint);
+    surfaceNodes.push_back(hitPoint);
     
     // optional: draw the leaf AABB
-    appendAABBWireframe(debugLines, nodes[bestNode].box.bmin, nodes[bestNode].box.bmax);
+    // appendAABBWireframe(debugLines, nodes[bestNode].box.bmin, nodes[bestNode].box.bmax);
 
     // store triangle indices (the actual vertex indices)
     std::array<unsigned int, 3> dIndList = {
@@ -543,5 +709,9 @@ void BVHMesh::loadNewDrawPoint(glm::mat4 InvMVP, glm::mat4 InvModelMatrix){
         nodes[bestNode].indices[bestTriBase + 2]
     };
     drawTriIndices.push_back(dIndList);
+
+    if(surfaceNodes.size() > 1){
+        surfaceTraversal();
+    }
 
 }
