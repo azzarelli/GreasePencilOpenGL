@@ -11,4 +11,6 @@ glm::mat4 getProjectionMatrix();
 
 extern bool flag_loadNewPoint2Draw;
 
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void char_callback(GLFWwindow* window, unsigned int c);
 #endif

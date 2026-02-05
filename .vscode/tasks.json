@@ -9,7 +9,15 @@
                 "-g",
                 "${workspaceFolder}/*.cpp",
                 "${workspaceFolder}/common/*.cpp",
+                "${workspaceFolder}/imgui/*.cpp",
+                "${workspaceFolder}/imgui/backends/*.cpp",
                 "${workspaceFolder}/glad/*.c",
+
+                "-I${workspaceFolder}",
+                "-I${workspaceFolder}/common",
+                "-I${workspaceFolder}/imgui",
+                "-I${workspaceFolder}/imgui/backends",
+                
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
                 "-lGL",

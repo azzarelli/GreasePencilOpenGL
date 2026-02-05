@@ -44,12 +44,12 @@ void main(){
   float cosSpec = clamp (dot(EyeN, Refl), 0, 1);
   MaterialSpecularColor = MaterialSpecularColor * LightPower * pow(cosSpec, 2) / (distance * distance);
 
-  vec3 DebugColor = vec3(1.0f,0.0f, 0.0f);
+  vec3 DebugColor = vec3(0.9f,0.9f, 0.9f);
 
 
 	color.rgb = 
-  //DebugColor ;
-    MaterialAmbientColor + MaterialDiffuseColor + MaterialSpecularColor;
+    DebugColor;
+    //MaterialAmbientColor + MaterialDiffuseColor + MaterialSpecularColor;
   
   color.a = 1.0;
 }

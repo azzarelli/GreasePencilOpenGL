@@ -26,6 +26,9 @@ Future Work:
 - (feature) Estimate best position of N darts for mapping a 3-D surface to a 2-D shape
 - (output) A high-res PNG of our pattern blocks/designs baked on some UV-wrapping rules (need to figure out)
 
+New:
+- Now uses DearImGUI for input handling inputs and visual options
+
 ![Alt text](githubassets/cube.png)
 ![Alt text](githubassets/ico.png)
 ![Alt text](githubassets/face.png)

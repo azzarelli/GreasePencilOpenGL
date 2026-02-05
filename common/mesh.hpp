@@ -7,6 +7,9 @@
 
 #include <GL/glew.h>
 #include <glm/glm.hpp>
+#include "edgeMap.hpp"
+
+
 
 class BaseMesh{
     public:
@@ -20,6 +23,9 @@ class BaseMesh{
         std::vector<unsigned int> indices;
         std::vector<glm::vec2> uvs;
         std::vector<glm::vec3> normals;
+
+        // EdgeMap
+        EdgeToTriangles edgeToTris;
 
     private:
         const aiScene* scene;
@@ -81,7 +87,7 @@ class BVHMesh : public BaseMesh{
 
         bool rayNodeClosestHit(uint32_t NodeIdx,const glm::vec3& ro,const glm::vec3& rd,float& outT,uint32_t& outTriBase );
         void surfaceTraversal();
-        void recursiveTriangleTraversal(glm::vec3 A, glm::vec3 B, std::array<unsigned int, 3> triIndices, int depth);
+        void recursiveTriangleTraversal(glm::vec3 A, glm::vec3 B, std::array<unsigned int, 3> triIndices, std::array<unsigned int, 3> triIndicesB, int depth);
 
     protected:
         uint32_t leafMaxSize;

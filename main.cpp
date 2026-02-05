@@ -10,6 +10,11 @@ using namespace glm;
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/string_cast.hpp>
 
+
+#include "imgui.h"
+#include "backends/imgui_impl_glfw.h"
+#include "backends/imgui_impl_opengl3.h"
+
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
 #include <assimp/postprocess.h>
@@ -18,8 +23,11 @@ using namespace glm;
 #include "common/controls.hpp"
 #include "common/mesh.hpp"
 
-
 GLFWwindow* window = nullptr;
+
+extern float speed;
+extern float mouseSpeed;
+extern float FoV;
 
 int main(){
 
@@ -54,9 +62,18 @@ int main(){
         return -1;
     }
 
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    ImGui::StyleColorsDark();
+
+    ImGui_ImplGlfw_InitForOpenGL(window, false);
+    ImGui_ImplOpenGL3_Init("#version 330 core");
+
     glfwSetScrollCallback(window, scroll_callback);
-    
     glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetKeyCallback(window, key_callback);
+    glfwSetCharCallback(window, char_callback);
 
     // To stop window from autoclosing - lol
     glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
@@ -112,6 +129,28 @@ int main(){
     do{
         // Clear scene to avoid flickering
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        // UI stuff
+        static bool showBVH = true;
+        static float pointSize = 1.0f;
+        static int bvhDepth = 24; // you use 24 in buildBVH
+
+        
+        ImGui::Begin("BVH Controls");
+        ImGui::Checkbox("Show BVH debug", &showBVH);
+        ImGui::InputFloat("Point size", &pointSize, 0.1f, 1.0f, "%.3f");
+        ImGui::SliderInt("BVH depth", &bvhDepth, 1, 64);
+        ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+        ImGui::DragFloat("Speed", &speed, 0.01f, 0.0f, 0.1f);
+        ImGui::DragFloat("Mouse speed", &mouseSpeed, 0.00001f, 0.0f, 0.0001f);
+        ImGui::SliderFloat("FoV", &FoV, 20.0f, 90.0f);
+        ImGui::End();
+
+
+        // Algo
         glClearColor(0.0f, 0.0f, 0.1f, 1.0f);
 
         computeMatricesFromInputs();
@@ -141,19 +180,21 @@ int main(){
 
 
 
-        glUseProgram(debugBVHProgramID);
-        glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
-        glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f); // red-ish
-        glBindVertexArray(lineVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
-        glBufferData(GL_ARRAY_BUFFER,
-                    basemesh.debugLines.size() * sizeof(glm::vec3),
-                    basemesh.debugLines.data(),
-                    GL_DYNAMIC_DRAW);
+        if (showBVH) {
+            glUseProgram(debugBVHProgramID);
+            glUniformMatrix4fv(BVHMatrixID, 1, GL_FALSE, &mvp[0][0]);
+            glUniform4f(BVHColID, 1.0f, 0.2f, 0.2f, 1.0f);
+            glBindVertexArray(lineVAO);
+            glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+            glBufferData(GL_ARRAY_BUFFER,
+                        basemesh.debugLines.size() * sizeof(glm::vec3),
+                        basemesh.debugLines.data(),
+                        GL_DYNAMIC_DRAW);
+            glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)basemesh.debugLines.size());
+        }
 
-        // draw all segments
-        glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)basemesh.debugLines.size());
-
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		// Swap buffers
 		glfwSwapBuffers(window);
 		glfwPollEvents();
@@ -165,6 +206,10 @@ int main(){
     basemesh.del();
 
 	// Close OpenGL window and terminate GLFW
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
 	glfwTerminate();
 
 	return 0;
